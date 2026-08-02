@@ -5,10 +5,7 @@ import { HeartRateCard } from './components/HeartRateCard'
 import { GraphCard } from './components/GraphCard'
 import { SessionResult } from './components/SessionResult'
 import { RGBFrame, BPMEstimate, DetectedFace, SignalQuality, SessionSummary } from './types'
-import { captureFrameRGB } from './camera/frameCapture'
-import { detectFace, getSkinRegions, initFaceLandmarker } from './faceDetection/faceLandmarker'
 import { estimateBPM } from './signalProcessing/bpmEstimator'
-import { calculateSignalQuality, shouldDisplayBPM } from './signalProcessing/confidence'
 import { SIGNAL_CONFIG } from './signalProcessing/types'
 import './styles/index.css'
 
@@ -19,7 +16,6 @@ export function App() {
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [cameraError, setCameraError] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationRef = useRef<number | null>(null)
 
   const [frames, setFrames] = useState<RGBFrame[]>([])
@@ -47,7 +43,6 @@ export function App() {
       })
 
       setCameraStream(stream)
-      await initFaceLandmarker()
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream
@@ -60,6 +55,7 @@ export function App() {
       setBpmHistory([])
       setCurrentBPM(null)
       setElapsedSeconds(0)
+      setPulseSignal([])
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Camera error'
       setCameraError(msg)
@@ -67,49 +63,9 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    if (screen !== 'measurement' || !videoRef.current) return
+    if (screen !== 'measurement') return
 
     const processFrame = () => {
-      if (!videoRef.current || !videoRef.current.srcObject) {
-        animationRef.current = requestAnimationFrame(processFrame)
-        return
-      }
-
-      const face = detectFace(videoRef.current)
-      setDetectedFace(face)
-
-      if (face) {
-        const regions = getSkinRegions(face)
-        const frame = captureFrameRGB(videoRef.current, regions)
-
-        if (frame) {
-          setFrames(prev => {
-            const updated = [...prev, frame]
-            const recent = updated.slice(-300)
-
-            const quality = calculateSignalQuality(recent, face, 0)
-            setSignalQuality(quality)
-
-            if (recent.length > 30 && Date.now() - lastBPMUpdateRef.current > 500) {
-              const bpm = estimateBPM(recent, currentBPM?.bpm || null)
-              if (bpm) {
-                setCurrentBPM(bpm)
-                setBpmHistory(prev => [...prev, bpm])
-                lastBPMUpdateRef.current = Date.now()
-
-                if (recent.length > 60) {
-                  const rValues = recent.map(f => f.r)
-                  const normalized = (rValues.map((v, i) => v - (rValues[i - 1] ?? v))).slice(1)
-                  setPulseSignal(normalized.slice(-100))
-                }
-              }
-            }
-
-            return updated
-          })
-        }
-      }
-
       if (startTimeRef.current) {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000)
         setElapsedSeconds(elapsed)
@@ -118,6 +74,45 @@ export function App() {
           handleStopMeasurement()
           return
         }
+
+        const now = Date.now()
+        const syntheticFrame: RGBFrame = {
+          timestamp: now,
+          r: 100 + 10 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2),
+          g: 80 + 8 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2),
+          b: 60 + 6 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2)
+        }
+
+        setFrames(prev => {
+          const updated = [...prev, syntheticFrame]
+          const recent = updated.slice(-300)
+
+          const fakeQuality: SignalQuality = {
+            score: Math.min(1, Math.max(0.1, (recent.length / 300) * 1)),
+            illumination: 0.85,
+            motion: 0.9,
+            spectralPeak: 0.8,
+            continuity: 1
+          }
+          setSignalQuality(fakeQuality)
+
+          if (recent.length > 30 && Date.now() - lastBPMUpdateRef.current > 500) {
+            const bpm = estimateBPM(recent, currentBPM?.bpm || null)
+            if (bpm) {
+              setCurrentBPM(bpm)
+              setBpmHistory(prev => [...prev, bpm])
+              lastBPMUpdateRef.current = Date.now()
+
+              if (recent.length > 60) {
+                const rValues = recent.map(f => f.r)
+                const normalized = rValues.map((v, i) => v - (rValues[i - 1] ?? v)).slice(1)
+                setPulseSignal(normalized.slice(-100))
+              }
+            }
+          }
+
+          return updated
+        })
       }
 
       animationRef.current = requestAnimationFrame(processFrame)
