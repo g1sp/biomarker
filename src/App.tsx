@@ -78,11 +78,12 @@ export function App() {
         }
 
         const now = Date.now()
+        const noise = Math.sin(now * 0.002) * 3
         const syntheticFrame: RGBFrame = {
           timestamp: now,
-          r: 100 + 10 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2),
-          g: 80 + 8 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2),
-          b: 60 + 6 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2)
+          r: 100 + 10 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2) + noise,
+          g: 80 + 8 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2) + noise * 0.8,
+          b: 60 + 6 * Math.sin(2 * Math.PI * (elapsed / 1000) * 1.2) + noise * 0.6
         }
 
         setFrames(prev => {
