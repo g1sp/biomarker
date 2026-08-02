@@ -1,10 +1,10 @@
 import React from 'react'
-import { SessionSummary } from '../types'
-import { GraphCard } from './GraphCard'
+import { SessionSummary, BPMEstimate } from '../types'
+import { SimpleChart } from './SimpleChart'
 
 interface SessionResultProps {
   summary: SessionSummary
-  bpmHistory: Array<{ bpm: number; timestamp: number }>
+  bpmHistory: BPMEstimate[]
   onMeasureAgain: () => void
 }
 
@@ -44,7 +44,11 @@ export function SessionResult({ summary, bpmHistory, onMeasureAgain }: SessionRe
         </div>
       </div>
 
-      <GraphCard pulseSignal={bpmValues} bpmHistory={bpmHistory} showPulse={false} />
+      {bpmValues.length > 0 && (
+        <div style={{ marginTop: '30px' }}>
+          <SimpleChart data={bpmValues} title="Heart Rate Over Time" height={250} />
+        </div>
+      )}
 
       <div className="medical-disclaimer">
         <strong>Experimental Measurement:</strong> This measurement may be inaccurate. It is not intended to diagnose,
