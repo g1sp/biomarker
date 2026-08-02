@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Webcam Heart Rate Monitor - PRD & Specs</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+    }
+    h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+    h2 { color: #34495e; margin-top: 30px; }
+    h3 { color: #555; }
+    .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .section { margin-bottom: 30px; }
+    code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: 'Monaco', monospace; }
+    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    ul, ol { margin: 15px 0; padding-left: 30px; }
+    li { margin: 8px 0; }
+    .highlight { background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; border-radius: 4px; margin: 15px 0; }
+    .warning { background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; border-radius: 4px; margin: 15px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background: #f4f4f4; font-weight: 600; }
+    .toc { background: #f9f9f9; padding: 20px; border-radius: 5px; }
+    .toc a { color: #3498db; text-decoration: none; display: block; margin: 5px 0; }
+    .toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>🫀 Webcam Heart Rate Monitor</h1>
+  <p><strong>Version:</strong> 1.0 | <strong>Status:</strong> Production Ready</p>
+
+  <div class="toc">
+    <strong>Quick Navigation:</strong><br>
+    <a href="#prd">Product Requirements</a>
+    <a href="#arch">Architecture</a>
+    <a href="#pipeline">Signal Pipeline</a>
+    <a href="#api">API Reference</a>
+    <a href="#limits">Limitations</a>
+  </div>
+
+  <!-- PRD SECTION -->
+  <div class="section" id="prd">
+    <h2>1. Product Summary</h2>
+    <p>Build a privacy-first webpage that uses a computer webcam to estimate a user's heart rate without physical contact via remote photoplethysmography (rPPG).</p>
+
+    <h3>Core Features</h3>
+    <ul>
+      <li>Live webcam feed with face-position guidance</li>
+      <li>Real-time rPPG analysis from facial color changes</li>
+      <li>Heart rate display in beats per minute (BPM)</li>
+      <li>Live pulse waveform and HR trend graphs</li>
+      <li>Signal confidence indicator (Good/Fair/Poor)</li>
+      <li>10-second calibration minimum before displaying BPM</li>
+      <li>Session summary with min/max/avg statistics</li>
+      <li>Explicit medical disclaimer and privacy notice</li>
+    </ul>
+
+    <h3>2. User Experience Flow</h3>
+    <table>
+      <tr>
+        <th>Step</th>
+        <th>Duration</th>
+        <th>User Action</th>
+        <th>Display</th>
+      </tr>
+      <tr>
+        <td><strong>Introduction</strong></td>
+        <td>Instant</td>
+        <td>Read privacy notice, click "Start"</td>
+        <td>Welcome screen, disclaimer, educational info</td>
+      </tr>
+      <tr>
+        <td><strong>Camera Setup</strong></td>
+        <td>1-2s</td>
+        <td>Grant camera permission</td>
+        <td>Mirrored webcam preview, face guide oval, positioning hints</td>
+      </tr>
+      <tr>
+        <td><strong>Calibration</strong></td>
+        <td>10s</td>
+        <td>Sit still, face centered, even lighting</td>
+        <td>Progress bar, "Finding your pulse…", signal quality indicator</td>
+      </tr>
+      <tr>
+        <td><strong>Measurement</strong></td>
+        <td>30–60s</td>
+        <td>Remain still</td>
+        <td>Large BPM, confidence badge, live pulse waveform, HR trend</td>
+      </tr>
+      <tr>
+        <td><strong>Results</strong></td>
+        <td>Instant</td>
+        <td>Review or "Measure Again"</td>
+        <td>Average BPM, min/max range, signal quality %, summary graph</td>
+      </tr>
+    </table>
+
+    <h3>3. Functional Requirements</h3>
+    <h4>Camera</h4>
+    <ul>
+      <li>Use <code>navigator.mediaDevices.getUserMedia()</code></li>
+      <li>Request video only (no audio)</li>
+      <li>Target 640×480 or 1280×720 at ~30 FPS</li>
+      <li>Chrome/Edge desktop; localhost/HTTPS only</li>
+    </ul>
+
+    <h4>Face & Skin Detection</h4>
+    <ul>
+      <li>Use MediaPipe Face Landmarker to locate face</li>
+      <li>Extract RGB samples from: forehead, left cheek, right cheek</li>
+      <li>Avoid: eyes, eyebrows, mouth, hair, background</li>
+      <li>Track regions as face moves</li>
+    </ul>
+
+    <h4>Heart Rate Estimation</h4>
+    <ul>
+      <li>Capture RGB intensity from face regions each frame</li>
+      <li>Apply POS (Plane-Orthogonal-to-Skin) algorithm</li>
+      <li>Remove slow lighting trends (detrending)</li>
+      <li>Apply frequency range 0.7–3.0 Hz (42–180 BPM)</li>
+      <li>Analyze 10–15 second rolling window</li>
+      <li>Identify dominant pulse frequency via FFT</li>
+      <li>Smooth BPM using exponential moving average</li>
+      <li><strong>CRITICAL: Hide BPM when confidence &lt; 60%</strong></li>
+    </ul>
+
+    <h4>Signal Quality Scoring</h4>
+    <ul>
+      <li><strong>Illumination:</strong> Brightness level consistency</li>
+      <li><strong>Motion:</strong> Frame-to-frame RGB stability</li>
+      <li><strong>Continuity:</strong> Frames captured vs. expected</li>
+      <li><strong>Spectral Peak:</strong> Strength of detected frequency</li>
+      <li><strong>Result:</strong> Confidence = (ill + motion + cont + peak) / 4 × face_confidence</li>
+    </ul>
+
+    <div class="warning">
+      <strong>Guard Rail:</strong> The most important guardrail is to <strong>withhold the BPM number when confidence is poor</strong>. Transparent signal quality over impressive-looking but unreliable numbers.
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE SECTION -->
+  <div class="section" id="arch">
+    <h2>4. Technical Architecture</h2>
+
+    <h3>Directory Structure</h3>
+    <pre>src/
+├── signalProcessing/       # Pure signal functions (testable)
+│   ├── pos.ts             # POS algorithm
+│   ├── fft.ts             # FFT frequency analysis
+│   ├── detrend.ts         # Normalization & detrending
+│   ├── bpmEstimator.ts    # BPM calculation
+│   ├── confidence.ts      # Signal quality scoring
+│   └── types.ts           # Config constants
+├── faceDetection/
+│   └── faceLandmarker.ts  # MediaPipe integration
+├── camera/
+│   ├── frameCapture.ts    # Canvas RGB sampling
+│   └── useCamera.ts       # Camera permissions
+├── components/            # React UI
+│   ├── Intro.tsx
+│   ├── CameraCard.tsx
+│   ├── HeartRateCard.tsx
+│   ├── GraphCard.tsx
+│   └── SessionResult.tsx
+└── types/
+    └── index.ts           # Shared TypeScript types</pre>
+
+    <h3>Stack</h3>
+    <ul>
+      <li><strong>Build:</strong> Vite 5, TypeScript 5</li>
+      <li><strong>UI:</strong> React 18, CSS Grid</li>
+      <li><strong>Signals:</strong> Pure TypeScript (no external DSP libs)</li>
+      <li><strong>Face Detection:</strong> MediaPipe Tasks Vision</li>
+      <li><strong>Charts:</strong> Chart.js 4</li>
+      <li><strong>Testing:</strong> Vitest</li>
+    </ul>
+
+    <h3>Key Design Principles</h3>
+    <ul>
+      <li>Signal processing = pure functions (zero React/DOM dependencies)</li>
+      <li>Frame capture via Canvas API (fast, deterministic)</li>
+      <li>State management: React hooks (minimal, localized)</li>
+      <li>Privacy: All processing local; no API calls</li>
+      <li>Transparency: Multiple disclaimers visible at each step</li>
+    </ul>
+  </div>
+
+  <!-- SIGNAL PIPELINE -->
+  <div class="section" id="pipeline">
+    <h2>5. Signal Processing Pipeline</h2>
+
+    <pre>
+Frame Capture (30 FPS)
+      ↓
+Face Detection (MediaPipe)
+      ↓
+Extract RGB from Skin Regions (Forehead + Cheeks)
+      ↓
+Maintain Rolling Buffer (300 frames ≈ 10s)
+      ↓
+Apply POS Algorithm (R-G, G-B decomposition)
+      ↓
+Normalize & Detrend (remove lighting trends)
+      ↓
+Compute FFT on Signal
+      ↓
+Find Peak Frequency in 0.7-3.0 Hz Range
+      ↓
+Convert Frequency → BPM
+      ↓
+Calculate Confidence Score
+      ↓
+IF confidence ≥ 0.6 AND elapsed ≥ 10s:
+  Display BPM + Confidence Badge
+ELSE:
+  Show "Waiting for stable signal…"
+      ↓
+Update Live Charts
+      ↓
+Loop at next frame
+    </pre>
+
+    <h3>Algorithm Details</h3>
+    <h4>POS (Plane-Orthogonal-to-Skin)</h4>
+    <pre>
+L1 = R - G
+L2 = G - B
+S1 = normalize(L1)
+S2 = normalize(L2)
+P = S1 - S2 × (std(L1) / std(L2))
+pulse = detrend(normalize(P))
+    </pre>
+
+    <h4>FFT Frequency Detection</h4>
+    <pre>
+fft = DFT(pulse_signal)
+magnitudes = |fft_bins|
+peak_bin = argmax(magnitudes)
+peak_hz = (peak_bin × sampling_rate) / window_length
+bpm = round(peak_hz × 60)
+confidence = peak_magnitude / sqrt(window_length)
+    </pre>
+
+    <h4>Confidence Scoring</h4>
+    <pre>
+illumination = assess brightness level (0–1)
+motion = assess RGB frame-to-frame stability (0–1)
+continuity = frames_captured / frames_expected (0–1)
+spectral_peak = min(1, peak_magnitude / 100) (0–1)
+score = (illumination + motion + continuity + spectral_peak) / 4 × face_confidence
+final = max(0, min(1, score))
+    </pre>
+  </div>
+
+  <!-- API REFERENCE -->
+  <div class="section" id="api">
+    <h2>6. Core Function API</h2>
+
+    <h3>Signal Processing</h3>
+    <table>
+      <tr>
+        <th>Function</th>
+        <th>Input</th>
+        <th>Output</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><code>estimateBPM(frames, previousBPM)</code></td>
+        <td><code>RGBFrame[]</code></td>
+        <td><code>BPMEstimate | null</code></td>
+        <td>Compute BPM from frame history</td>
+      </tr>
+      <tr>
+        <td><code>posAlgorithm(r, g, b)</code></td>
+        <td><code>number[]</code></td>
+        <td><code>number[]</code></td>
+        <td>Extract pulse signal</td>
+      </tr>
+      <tr>
+        <td><code>computeFFT(signal)</code></td>
+        <td><code>number[]</code></td>
+        <td><code>FFTResult</code></td>
+        <td>Find dominant frequency</td>
+      </tr>
+      <tr>
+        <td><code>calculateSignalQuality(...)</code></td>
+        <td><code>RGBFrame[], DetectedFace, magnitude</code></td>
+        <td><code>SignalQuality</code></td>
+        <td>Score signal reliability</td>
+      </tr>
+      <tr>
+        <td><code>normalize(signal)</code></td>
+        <td><code>number[]</code></td>
+        <td><code>number[]</code></td>
+        <td>Z-score normalization</td>
+      </tr>
+      <tr>
+        <td><code>detrend(signal)</code></td>
+        <td><code>number[]</code></td>
+        <td><code>number[]</code></td>
+        <td>Remove linear trend</td>
+      </tr>
+    </table>
+
+    <h3>Face Detection</h3>
+    <table>
+      <tr>
+        <th>Function</th>
+        <th>Purpose</th>
+        <th>Returns</th>
+      </tr>
+      <tr>
+        <td><code>initFaceLandmarker()</code></td>
+        <td>Initialize MediaPipe async</td>
+        <td><code>Promise&lt;void&gt;</code></td>
+      </tr>
+      <tr>
+        <td><code>detectFace(video)</code></td>
+        <td>Find face in video frame</td>
+        <td><code>DetectedFace | null</code></td>
+      </tr>
+      <tr>
+        <td><code>getSkinRegions(face)</code></td>
+        <td>Extract forehead + cheeks ROI</td>
+        <td><code>Region[]</code></td>
+      </tr>
+    </table>
+
+    <h3>Camera</h3>
+    <table>
+      <tr>
+        <th>Function</th>
+        <th>Purpose</th>
+      </tr>
+      <tr>
+        <td><code>captureFrame(video)</code></td>
+        <td>Get ImageData from video</td>
+      </tr>
+      <tr>
+        <td><code>captureFrameRGB(video, regions)</code></td>
+        <td>Average RGB from regions → RGBFrame</td>
+      </tr>
+      <tr>
+        <td><code>useCamera()</code></td>
+        <td>React hook for camera stream</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- TYPES -->
+  <div class="section">
+    <h2>7. TypeScript Type Definitions</h2>
+    <pre>
+interface RGBFrame {
+  timestamp: number       // milliseconds
+  r: number             // 0–255
+  g: number             // 0–255
+  b: number             // 0–255
+}
+
+interface BPMEstimate {
+  bpm: number           // beats per minute
+  confidence: number    // 0–1 (only display if ≥ 0.6)
+  timestamp: number
+}
+
+interface SignalQuality {
+  score: number         // 0–1
+  illumination: number  // 0–1
+  motion: number        // 0–1
+  spectralPeak: number  // 0–1
+  continuity: number    // 0–1
+  reason?: string       // diagnostic message
+}
+
+interface DetectedFace {
+  x: number
+  y: number
+  width: number
+  height: number
+  confidence: number    // 0–1
+  landmarks: Array&lt;{x, y}&gt;
+}
+
+interface SessionSummary {
+  averageBPM: number
+  minBPM: number
+  maxBPM: number
+  goodSignalPercent: number
+  duration: number
+}
+    </pre>
+  </div>
+
+  <!-- LIMITATIONS -->
+  <div class="section" id="limits">
+    <h2>8. Known Limitations & Error Handling</h2>
+
+    <h3>Measurement Limitations</h3>
+    <ul>
+      <li><strong>Lighting:</strong> Requires even, bright lighting (avoid shadows, backlight, dim)</li>
+      <li><strong>Stillness:</strong> Movement, talking, chewing degrades signal</li>
+      <li><strong>Accuracy:</strong> ±5 BPM typical under ideal conditions</li>
+      <li><strong>Not Medical:</strong> Experimental tool; not for diagnostics</li>
+      <li><strong>Single Face:</strong> Fails with multiple faces; requires exactly one</li>
+      <li><strong>Frontal Only:</strong> Side profiles not detected</li>
+    </ul>
+
+    <h3>Error States (Handled Explicitly)</h3>
+    <ul>
+      <li>Camera permission denied → "Camera access denied"</li>
+      <li>No camera available → "No camera found"</li>
+      <li>Browser unsupported → "WebRTC not supported"</li>
+      <li>Face not detected → Dashed guide box, "Position your face here"</li>
+      <li>Multiple faces → "Please show only one face"</li>
+      <li>Insufficient lighting → Signal quality: Poor</li>
+      <li>Excessive movement → Signal quality: Poor</li>
+      <li>Weak spectral peak → Withhold BPM until stable</li>
+      <li>Tab backgrounded → Pause measurement</li>
+      <li>Camera disconnected → Show error, allow retry</li>
+    </ul>
+
+    <div class="highlight">
+      <strong>Safety Guarantee:</strong> Never display an unreliable BPM number. BPM is only shown when:
+      <ol>
+        <li>Confidence score ≥ 0.6</li>
+        <li>Measurement duration ≥ 10 seconds</li>
+        <li>Face continuously detected</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- PRIVACY & DEPLOYMENT -->
+  <div class="section">
+    <h2>9. Privacy & Deployment</h2>
+
+    <h3>Privacy Guarantee</h3>
+    <ul>
+      <li>✅ <strong>No uploads:</strong> Video never leaves browser</li>
+      <li>✅ <strong>No recording:</strong> Frames not saved to disk</li>
+      <li>✅ <strong>No analytics:</strong> No tracking of measurements</li>
+      <li>✅ <strong>Session-only:</strong> Results in localStorage, cleared on tab close</li>
+      <li>✅ <strong>Open source:</strong> Full code available for inspection</li>
+    </ul>
+
+    <h3>Deployment</h3>
+    <pre>
+# Build
+npm run build
+
+# Deploy to GitHub Pages, Vercel, or Netlify
+# All code runs client-side; no backend required
+    </pre>
+
+    <h3>Browser Support</h3>
+    <ul>
+      <li>Chrome 76+</li>
+      <li>Edge 79+</li>
+      <li>Firefox 55+</li>
+      <li><strong>Requires:</strong> HTTPS or localhost</li>
+      <li><strong>Requires:</strong> WebRTC + Canvas API</li>
+    </ul>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="section">
+    <h2>10. Legal & Medical Disclaimer</h2>
+    <div class="warning">
+      <strong>This is an experimental educational tool, not a medical device.</strong>
+      <br><br>
+      The measurement may be inaccurate and should not be used to:
+      <ul>
+        <li>Diagnose any health condition</li>
+        <li>Guide medical treatment decisions</li>
+        <li>Replace professional healthcare</li>
+      </ul>
+      For health concerns, consult a qualified healthcare professional.
+    </div>
+  </div>
+
+  <hr style="margin-top: 50px; border: none; border-top: 2px solid #ddd;">
+  <p style="text-align: center; color: #999; margin-top: 30px;">
+    <strong>Webcam Heart Rate Monitor v1.0</strong> | Production Ready | 2026
+  </p>
+</div>
+</body>
+</html>
